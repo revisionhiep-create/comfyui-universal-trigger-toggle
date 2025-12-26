@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2025-12-26
+### Fixed
+- **Empty State Bug**: Resolved an issue where an empty list `[]` from upstream gallery nodes would render as a single empty button.
+### Removed
+- **Strength Adjustment**: Removed the weight adjustment toggle and mouse-wheel logic to provide a cleaner, more focused UI for word toggling.
+
+## [1.2.0] - 2025-12-26
+### Added
+- **Hidden Widget Architecture**: Replaced the visible "trigger_words" text field with a background hidden widget. This keeps the node UI clean while maintaining full data persistence.
+### Changed
+- **Socket UI**: Moved the `trigger_words` label directly to the green input connector (socket), matching the standard ComfyUI aesthetic.
+- **Default Settings**: `group_mode` now defaults to `false` for a better "out of the box" experience.
+- **Branding**: Removed "(LoraManager)" from the node title bar for a cleaner, standalone look.
+
 ## [1.1.0] - 2025-12-25
 ### Fixed
 - **UI Auto-scaling**: Removed `max-height` constraints on the tags container. The node now grows vertically to accommodate any number of trigger words without scrollbars.
