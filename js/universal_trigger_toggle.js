@@ -1,7 +1,7 @@
 /**
  * Standalone Universal Trigger Toggle
- * REVISION V6 - AGGRESSIVE MAGIC SYNC
- * Updated: 2025-12-25 22:15:00
+ * REVISION V1.1.6 - FIX UNGROUPING + CLEAN TITLE
+ * Updated: 2025-12-26 00:30:00
  */
 import { app } from "../../scripts/app.js";
 
@@ -17,8 +17,8 @@ style.textContent = `
         border-radius: 8px;
         border: 1px solid rgba(255, 255, 255, 0.1);
         width: 100%;
-        min-height: 80px;
-        max-height: 300px;
+        height: 100%;
+        min-height: 60px;
         overflow-y: auto;
         box-sizing: border-box;
         margin: 5px 0;
@@ -48,10 +48,6 @@ style.textContent = `
         color: white;
         border-color: #3b82f6;
         box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
-    }
-    .universal-tag:hover {
-        background: rgba(255, 255, 255, 0.15);
-        transform: translateY(-1px);
     }
 `;
 document.head.appendChild(style);
@@ -97,12 +93,14 @@ app.registerExtension({
     name: "UniversalTriggerToggle.Standalone",
     
     async nodeCreated(node) {
-        if (node.comfyClass === "Universal Trigger Toggle (LoraManager)") {
+        // Recognize both names for transition compatibility
+        if (node.comfyClass === "Universal Trigger Toggle" || node.comfyClass === "Universal Trigger Toggle (LoraManager)") {
             const self = this;
             node.serialize_widgets = true;
 
             setTimeout(() => {
                 const triggerWordsWidget = node.widgets[0];
+                const groupModeWidget = node.widgets.find(w => w.name === "group_mode");
                 const tagWidget = addTagsWidget(node, "toggle_trigger_words", { defaultVal: [] }, () => {
                     node.setDirtyCanvas(true);
                 });
@@ -117,10 +115,8 @@ app.registerExtension({
                     if (!originNode || !originNode.widgets) return;
 
                     let raw = "";
-                    // BROAD SEARCH: Look through ALL widgets for anything that looks like a LoRA list or trigger words
                     for (const w of originNode.widgets) {
                         if (typeof w.value === "string" && w.value.trim()) {
-                            // If it's JSON or has a lora path, this is our winner
                             if (w.value.includes(".safetensors") || w.value.startsWith("[") || w.name === "trigger_words") {
                                 raw = w.value;
                                 break;
@@ -132,7 +128,6 @@ app.registerExtension({
 
                     let processed = raw;
                     try {
-                        // Check if it's JSON from Gallery or similar
                         if (raw.trim().startsWith('[') || raw.trim().startsWith('{')) {
                             const parsed = JSON.parse(raw);
                             const paths = [];
@@ -156,7 +151,6 @@ app.registerExtension({
                                 processed = all.length > 0 ? all.join(", ") : "";
                             }
                         } else if (raw.toLowerCase().endsWith(".safetensors")) {
-                            // Direct filename/path
                             const n = raw.split(/[\\\/]/).pop().replace(/\.safetensors$/i, "");
                             const r = await fetch(`/api/lm/loras/get-trigger-words?name=${encodeURIComponent(n)}`);
                             const d = await r.json();
@@ -164,9 +158,7 @@ app.registerExtension({
                         }
                     } catch(e) {}
 
-                    // Apply if changed
                     if (processed && triggerWordsWidget.value !== processed) {
-                        console.log("[Universal Toggle] Syncing fresh trigger words...");
                         triggerWordsWidget.value = processed;
                         self.updateTagsFromMessage(node, processed);
                     }
@@ -176,6 +168,15 @@ app.registerExtension({
                     if (node.graph) syncFromInput();
                     else clearInterval(interval);
                 }, 800);
+
+                // FIX: Add callback to group_mode to refresh UI immediately
+                if (groupModeWidget) {
+                    const orig = groupModeWidget.callback;
+                    groupModeWidget.callback = function() {
+                        if (orig) orig.apply(this, arguments);
+                        self.updateTagsFromMessage(node, triggerWordsWidget.value);
+                    };
+                }
 
                 triggerWordsWidget.callback = (v) => self.updateTagsFromMessage(node, v);
                 if (triggerWordsWidget.value) self.updateTagsFromMessage(node, triggerWordsWidget.value);
@@ -188,8 +189,19 @@ app.registerExtension({
         if (!node.tagWidget) return;
         const existing = {};
         (node.tagWidget.value || []).forEach(t => existing[t.text] = t);
+        
+        const groupMode = node.widgets.find(w => w.name === "group_mode")?.value ?? true;
         const defActive = node.widgets.find(w => w.name === "default_active")?.value ?? true;
-        const words = message.includes(',,') ? message.split(/,{2,}/) : message.split(',');
+        
+        // FIX: Respect groupMode when splitting the message
+        let words = [];
+        if (groupMode) {
+            words = message.includes(',,') ? message.split(/,{2,}/) : [message];
+        } else {
+            // Split by single or multiple commas when grouping is off
+            words = message.replace(/,{2,}/g, ',').split(',');
+        }
+
         node.tagWidget.value = words.map(w => w.trim()).filter(x => x).map(w => ({
             text: w,
             active: existing[w] ? existing[w].active : defActive,

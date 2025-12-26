@@ -1,12 +1,10 @@
-# FINAL REVISION - VERIFIED SYNC & UI
-# Updated: 2025-12-25 22:05:00 - SYNC_FIX_V4
 import json
 import re
 import logging
 
 logger = logging.getLogger(__name__)
 
-# --- UTILS (Self-contained) ---
+# --- UTILS (Self-contained for standalone node) ---
 class AnyType(str):
     def __ne__(self, __value: object) -> bool:
         return False
@@ -20,9 +18,10 @@ class FlexibleOptionalInputType(dict):
         return True
 
 any_type = AnyType("*")
+# --------------------------------------------------
 
 class UniversalTriggerToggle:
-    NAME = "Universal Trigger Toggle (LoraManager)"
+    NAME = "Universal Trigger Toggle"
     CATEGORY = "Lora Manager/utils"
     DESCRIPTION = "Toggle trigger words from any source"
     
@@ -44,17 +43,13 @@ class UniversalTriggerToggle:
     FUNCTION = "process_trigger_words"
 
     def _get_toggle_data(self, kwargs, key='toggle_trigger_words'):
-        if key not in kwargs:
-            return None
-        data = kwargs[key]
+        data = kwargs.get(key)
         if isinstance(data, dict) and '__value__' in data:
             return data['__value__']
         return data
 
     def process_trigger_words(self, trigger_words, group_mode, default_active, allow_strength_adjustment, id, **kwargs):
-        # The toggle_trigger_words widget contains the current state of all tags
         trigger_data = self._get_toggle_data(kwargs, 'toggle_trigger_words')
-        
         if trigger_data:
             try:
                 if isinstance(trigger_data, str):
@@ -67,20 +62,19 @@ class UniversalTriggerToggle:
                         # Format output with strength if enabled
                         if allow_strength_adjustment and item.get('strength') is not None:
                             strength = float(item['strength'])
-                            # Strip any existing formatting to avoid nesting like ((word:1.0):1.0)
+                            # Strip any existing formatting to avoid nesting
                             clean_word = re.sub(r'\((.+):([\d.]+)\)', r'\1', word).strip()
                             active_words.append(f"({clean_word}:{strength:.2f})")
                         else:
                             active_words.append(word)
                 
-                output = ", ".join(active_words)
-                return (output,)
+                return (", ".join(active_words),)
             except Exception as e:
                 logger.error(f"Error processing tags in Python: {e}")
 
-        # Fallback: if it's JSON from a gallery, hide it. Otherwise return raw input.
-        clean_input = trigger_words
-        if clean_input.strip().startswith('[') or clean_input.strip().startswith('{'):
+        # Fallback: if it's JSON from a gallery, hide it.
+        clean_input = trigger_words.strip()
+        if clean_input.startswith('[') or clean_input.startswith('{'):
             return ("",)
             
         return (clean_input,)
