@@ -16,7 +16,7 @@ A standalone custom node for ComfyUI that provides an interactive tag-based inte
 3. Restart ComfyUI.
 
 ## Usage
-1. Add the **Universal Trigger Toggle (LoraManager)** node from the `Lora Manager/utils` category.
+1. Add the **Universal Trigger Toggle** node from the `Lora Manager/utils` category.
 2. Connect any LoRA loader's `trigger_words` output to this node's `trigger_words` input.
 3. The tags will populate automatically. Click them to toggle their inclusion in the final output string.
 4. Use the `filtered_trigger_words` output in your prompt concatenation.
@@ -24,4 +24,5 @@ A standalone custom node for ComfyUI that provides an interactive tag-based inte
 ## Credits
 - Based on the architectural patterns of the Lora-Manager project.
 - Pill UI design optimized for professional workflows.
+
 
