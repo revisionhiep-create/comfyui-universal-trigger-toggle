@@ -1,0 +1,14 @@
+[project]
+name = "comfyui-universal-trigger-toggle"
+description = "Interactive button-based trigger word manager with precision weighting and portable collections."
+version = "2.4.4"
+license = {text = "MIT"}
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/revisionhiep-create/comfyui-universal-trigger-toggle"
+
+[tool.comfy]
+PublisherId = "revybevy"
+DisplayName = "comfyui-universal-trigger-toggle"
+Icon = ""
