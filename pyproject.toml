@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-universal-trigger-toggle"
 description = "A standalone custom node for ComfyUI that provides an interactive tag-based interface to enable/disable trigger words from any LoRA loader or gallery node."
-version = "1.0.1"
+version = "1.3.0"
 license = {text = "MIT"}
 dependencies = []
 
