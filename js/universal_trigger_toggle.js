@@ -1,7 +1,7 @@
 /**
  * Standalone Universal Trigger Toggle
- * REVISION V1.1.6 - FIX UNGROUPING + CLEAN TITLE
- * Updated: 2025-12-26 00:30:00
+ * REVISION V1.3.1 - FIX [] BUTTON + REMOVE STRENGTH TOGGLE
+ * Updated: 2025-12-26 02:00:00
  */
 import { app } from "../../scripts/app.js";
 
@@ -66,8 +66,7 @@ function addTagsWidget(node, name, opts, callback) {
         tagsData.forEach((tag, index) => {
             const tagEl = document.createElement("div");
             tagEl.className = `universal-tag ${tag.active ? 'active' : ''}`;
-            const str = (tag.strength !== null && tag.strength !== undefined) ? ` (${Number(tag.strength).toFixed(2)})` : "";
-            tagEl.textContent = tag.text + str;
+            tagEl.textContent = tag.text;
             tagEl.onclick = (e) => {
                 e.stopPropagation();
                 widget.value[index].active = !widget.value[index].active;
@@ -93,14 +92,22 @@ app.registerExtension({
     name: "UniversalTriggerToggle.Standalone",
     
     async nodeCreated(node) {
-        // Recognize both names for transition compatibility
         if (node.comfyClass === "Universal Trigger Toggle" || node.comfyClass === "Universal Trigger Toggle (LoraManager)") {
             const self = this;
             node.serialize_widgets = true;
 
+            // 1. ADD THE INPUT SOCKET MANUALLY
+            node.addInput("trigger_words", "STRING", { "shape": 7 });
+
+            // 2. ADD A HIDDEN WIDGET for data sync
+            const hiddenWidget = node.addWidget("text", "trigger_words", "", (v) => {});
+            hiddenWidget.hidden = true;
+            hiddenWidget.computeSize = () => [0, -4]; 
+            node.triggerWordsWidget = hiddenWidget;
+
             setTimeout(() => {
-                const triggerWordsWidget = node.widgets[0];
                 const groupModeWidget = node.widgets.find(w => w.name === "group_mode");
+                
                 const tagWidget = addTagsWidget(node, "toggle_trigger_words", { defaultVal: [] }, () => {
                     node.setDirtyCanvas(true);
                 });
@@ -117,6 +124,7 @@ app.registerExtension({
                     let raw = "";
                     for (const w of originNode.widgets) {
                         if (typeof w.value === "string" && w.value.trim()) {
+                            // Check if value is a lora path or trigger words
                             if (w.value.includes(".safetensors") || w.value.startsWith("[") || w.name === "trigger_words") {
                                 raw = w.value;
                                 break;
@@ -128,27 +136,35 @@ app.registerExtension({
 
                     let processed = raw;
                     try {
-                        if (raw.trim().startsWith('[') || raw.trim().startsWith('{')) {
-                            const parsed = JSON.parse(raw);
-                            const paths = [];
-                            if (Array.isArray(parsed)) {
-                                parsed.forEach(i => {
-                                    if (i.lora) paths.push(i.lora);
-                                    else if (typeof i === 'string' && i.endsWith('.safetensors')) paths.push(i);
-                                });
-                            } else if (parsed.lora) {
-                                paths.push(parsed.lora);
-                            }
-
-                            if (paths.length > 0) {
-                                const all = [];
-                                for (const p of paths) {
-                                    const n = p.split(/[\\\/]/).pop().replace(/\.safetensors$/i, "");
-                                    const r = await fetch(`/api/lm/loras/get-trigger-words?name=${encodeURIComponent(n)}`);
-                                    const d = await r.json();
-                                    if (d.success && d.trigger_words) all.push(...d.trigger_words);
+                        const trimmedRaw = raw.trim();
+                        if (trimmedRaw.startsWith('[') || trimmedRaw.startsWith('{')) {
+                            // BUG FIX: If it's just an empty array "[]", treat as empty
+                            if (trimmedRaw === "[]" || trimmedRaw === "{}") {
+                                processed = "";
+                            } else {
+                                const parsed = JSON.parse(trimmedRaw);
+                                const paths = [];
+                                if (Array.isArray(parsed)) {
+                                    parsed.forEach(i => {
+                                        if (i.lora) paths.push(i.lora);
+                                        else if (typeof i === 'string' && i.endsWith('.safetensors')) paths.push(i);
+                                    });
+                                } else if (parsed.lora) {
+                                    paths.push(parsed.lora);
                                 }
-                                processed = all.length > 0 ? all.join(", ") : "";
+
+                                if (paths.length > 0) {
+                                    const all = [];
+                                    for (const p of paths) {
+                                        const n = p.split(/[\\\/]/).pop().replace(/\.safetensors$/i, "");
+                                        const r = await fetch(`/api/lm/loras/get-trigger-words?name=${encodeURIComponent(n)}`);
+                                        const d = await r.json();
+                                        if (d.success && d.trigger_words) all.push(...d.trigger_words);
+                                    }
+                                    processed = all.length > 0 ? all.join(", ") : "";
+                                } else {
+                                    processed = ""; // Nothing found in JSON
+                                }
                             }
                         } else if (raw.toLowerCase().endsWith(".safetensors")) {
                             const n = raw.split(/[\\\/]/).pop().replace(/\.safetensors$/i, "");
@@ -156,10 +172,12 @@ app.registerExtension({
                             const d = await r.json();
                             if (d.success && d.trigger_words) processed = d.trigger_words.join(", ");
                         }
-                    } catch(e) {}
+                    } catch(e) {
+                        console.error("Error syncing input:", e);
+                    }
 
-                    if (processed && triggerWordsWidget.value !== processed) {
-                        triggerWordsWidget.value = processed;
+                    if (node.triggerWordsWidget.value !== processed) {
+                        node.triggerWordsWidget.value = processed;
                         self.updateTagsFromMessage(node, processed);
                     }
                 };
@@ -169,18 +187,20 @@ app.registerExtension({
                     else clearInterval(interval);
                 }, 800);
 
-                // FIX: Add callback to group_mode to refresh UI immediately
                 if (groupModeWidget) {
                     const orig = groupModeWidget.callback;
                     groupModeWidget.callback = function() {
                         if (orig) orig.apply(this, arguments);
-                        self.updateTagsFromMessage(node, triggerWordsWidget.value);
+                        self.updateTagsFromMessage(node, node.triggerWordsWidget.value);
                     };
                 }
 
-                triggerWordsWidget.callback = (v) => self.updateTagsFromMessage(node, v);
-                if (triggerWordsWidget.value) self.updateTagsFromMessage(node, triggerWordsWidget.value);
+                if (node.triggerWordsWidget.value) {
+                    self.updateTagsFromMessage(node, node.triggerWordsWidget.value);
+                }
+                
                 node.onRemoved = () => clearInterval(interval);
+                node.setDirtyCanvas(true, true);
             }, 150);
         }
     },
@@ -190,22 +210,19 @@ app.registerExtension({
         const existing = {};
         (node.tagWidget.value || []).forEach(t => existing[t.text] = t);
         
-        const groupMode = node.widgets.find(w => w.name === "group_mode")?.value ?? true;
+        const groupMode = node.widgets.find(w => w.name === "group_mode")?.value ?? false;
         const defActive = node.widgets.find(w => w.name === "default_active")?.value ?? true;
         
-        // FIX: Respect groupMode when splitting the message
         let words = [];
         if (groupMode) {
-            words = message.includes(',,') ? message.split(/,{2,}/) : [message];
+            words = message.includes(',,') ? message.split(/,{2,}/) : (message ? [message] : []);
         } else {
-            // Split by single or multiple commas when grouping is off
-            words = message.replace(/,{2,}/g, ',').split(',');
+            words = message.replace(/,{2,}/g, ',').split(',').map(w => w.trim()).filter(x => x);
         }
 
-        node.tagWidget.value = words.map(w => w.trim()).filter(x => x).map(w => ({
+        node.tagWidget.value = words.map(w => ({
             text: w,
-            active: existing[w] ? existing[w].active : defActive,
-            strength: existing[w] ? existing[w].strength : null
+            active: existing[w] ? existing[w].active : defActive
         }));
     }
 });

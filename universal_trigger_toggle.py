@@ -29,10 +29,8 @@ class UniversalTriggerToggle:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "trigger_words": ("STRING", {"multiline": True, "default": ""}),
-                "group_mode": ("BOOLEAN", {"default": True}),
+                "group_mode": ("BOOLEAN", {"default": False}),
                 "default_active": ("BOOLEAN", {"default": True}),
-                "allow_strength_adjustment": ("BOOLEAN", {"default": False}),
             },
             "optional": FlexibleOptionalInputType(any_type),
             "hidden": {"id": "UNIQUE_ID"},
@@ -48,7 +46,10 @@ class UniversalTriggerToggle:
             return data['__value__']
         return data
 
-    def process_trigger_words(self, trigger_words, group_mode, default_active, allow_strength_adjustment, id, **kwargs):
+    def process_trigger_words(self, group_mode, default_active, id, **kwargs):
+        # The 'trigger_words' value will be in kwargs now because it's optional/dynamic
+        trigger_words = kwargs.get("trigger_words", "")
+        
         trigger_data = self._get_toggle_data(kwargs, 'toggle_trigger_words')
         if trigger_data:
             try:
@@ -58,15 +59,7 @@ class UniversalTriggerToggle:
                 active_words = []
                 for item in trigger_data:
                     if item.get('active', False):
-                        word = item['text']
-                        # Format output with strength if enabled
-                        if allow_strength_adjustment and item.get('strength') is not None:
-                            strength = float(item['strength'])
-                            # Strip any existing formatting to avoid nesting
-                            clean_word = re.sub(r'\((.+):([\d.]+)\)', r'\1', word).strip()
-                            active_words.append(f"({clean_word}:{strength:.2f})")
-                        else:
-                            active_words.append(word)
+                        active_words.append(item['text'])
                 
                 return (", ".join(active_words),)
             except Exception as e:
